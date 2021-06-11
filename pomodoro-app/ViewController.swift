@@ -6,6 +6,8 @@
 //
 
 import UIKit
+import AudioToolbox
+import UserNotifications
 
 class ViewController: UIViewController {
 
@@ -24,8 +26,8 @@ class ViewController: UIViewController {
     var timerCounting:Bool = false
     var timerModeLimit:Int = 10
     
-    let timerBreakModeLimit = 2
-    let timerFocusModeLimit = 5
+    let timerBreakModeLimit = 3
+    let timerFocusModeLimit = 10
     
     let BREAKMODE = 0
     let FOCUSMODE = 1
@@ -34,13 +36,40 @@ class ViewController: UIViewController {
     
     var timerMode = 1
     
+//    let notificationCenter = UNUserNotificationCenter.current()
     
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
         startStopButton.setTitleColor(UIColor.green, for: .normal)
         self.updateTimerMode(newmode: FOCUSMODE)
+
+        let notificationCenter = UNUserNotificationCenter.current()
+        notificationCenter.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            // we can use granted to interact with user here.
+        }
+
     }
+    
+    func buildModeNotification(){
+        var title   = ""
+        var body    = ""
+
+        let current_mode = self.timerMode
+        
+        if (current_mode == self.BREAKMODE){
+            title   = "Break is Over!"
+            body    = "Get back to your tasks, start Focus timer in the app"
+            
+        }else if (current_mode == self.FOCUSMODE){
+            title   = "Take a Break!"
+            body    = "You've earned it. Start Break timer in the app"
+        }
+        
+        self.buildNotification(title: title, body: body, delaytime: 3)
+    }
+    
+
 
     @IBAction func resetTapped(_ sender: Any) {
         let alert = UIAlertController(title: "Reset Timer?", message: "Are you sure you want to reset the Timer?", preferredStyle: .alert)
@@ -49,12 +78,7 @@ class ViewController: UIViewController {
         }))
         
         alert.addAction(UIAlertAction(title: "Yes", style: .default, handler: { (_) in
-            self.count = 0
-            self.timer.invalidate()
-            self.TimerLabel.text = self.makeTimeString(hours: 0, minutes: 0, seconds: 0)
-            self.startStopButton.setTitle("START", for: .normal)
-            self.startStopButton.setTitleColor(UIColor.green, for: .normal)
-            
+            self.resetTimer()
         }))
         
         self.present(alert, animated: true, completion: nil)
@@ -67,6 +91,7 @@ class ViewController: UIViewController {
         if(timerCounting){
             stopTimer()
         }else {
+            // AudioServicesPlaySystemSound(4095)
             startTimer()
         }
     }
@@ -75,6 +100,7 @@ class ViewController: UIViewController {
         self.updateTimerMode(newmode: self.FOCUSMODE)
         if(timerCounting){
             stopTimer()
+            
         }else {
             startTimer()
         }
@@ -96,13 +122,25 @@ class ViewController: UIViewController {
         self.timer.invalidate()
         self.startStopButton.setTitle("START", for: .normal)
         self.startStopButton.setTitleColor(UIColor.green, for: .normal)
+        self.resetColorScheme()
     }
     
     func startTimer() -> Void{
+        self.setColorSchemeByMode()
         self.timerCounting = true
         self.startStopButton.setTitle("STOP", for: .normal)
         self.startStopButton.setTitleColor(UIColor.red, for: .normal)
         self.timer = Timer.scheduledTimer(timeInterval: 1, target: self, selector: #selector(timerCounter), userInfo: nil, repeats: true)
+    }
+    
+    func resetTimer()->Void{
+        self.count = 0
+        self.timer.invalidate()
+        self.TimerLabel.text = self.makeTimeString(hours: 0, minutes: 0, seconds: 0)
+        self.startStopButton.setTitle("START", for: .normal)
+        self.startStopButton.setTitleColor(UIColor.green, for: .normal)
+        self.resetColorScheme()
+        self.timerCounting = false
     }
     
     @objc func timerCounter() -> Void {
@@ -112,7 +150,8 @@ class ViewController: UIViewController {
         TimerLabel.text = timeString
         
         if(count == self.timerModeLimit){
-            self.stopTimer()
+            self.buildModeNotification()
+            self.resetTimer()
         }
     }
     
@@ -144,6 +183,46 @@ class ViewController: UIViewController {
         }
     }
     
+
+    func setColorSchemeByMode() -> Void{
+        let currentMode = self.timerMode
+        
+        if (currentMode == self.BREAKMODE) {
+            self.view.backgroundColor = UIColor.orange
+            self.TimerLabel.textColor = UIColor.white
+            self.ModeLabel.textColor = UIColor.white
+            
+        } else if (currentMode == self.FOCUSMODE) {
+            self.view.backgroundColor = UIColor.black
+            self.TimerLabel.textColor = UIColor.white
+            self.ModeLabel.textColor = UIColor.white
+        }
+        
+    }
     
+    func resetColorScheme() -> Void {
+        self.view.backgroundColor = UIColor.white
+        self.TimerLabel.textColor = UIColor.black
+        self.ModeLabel.textColor = UIColor.black
+    }
+    
+    func buildNotification(title:String, body:String, delaytime: Double){
+        
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        
+        let date = Date().addingTimeInterval(delaytime)
+        let dateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+        
+        let request = UNNotificationRequest(
+            identifier: "identifier",
+            content: content,
+            trigger: trigger
+        )
+        
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
 }
 
